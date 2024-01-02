@@ -11,6 +11,7 @@ ARG RUST_VERSION=1.75.0
 ARG APP_NAME=dpiproxy
 FROM rust:${RUST_VERSION}-slim-bullseye AS build
 ARG APP_NAME
+RUN apt update && apt install -y libssl-dev pkg-config ca-certificates
 WORKDIR /app
 
 # Build the application.
@@ -47,6 +48,7 @@ FROM debian:bullseye-slim AS final
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
+RUN apt update && apt install -y libssl-dev pkg-config ca-certificates
 RUN adduser \
     --disabled-password \
     --gecos "" \
