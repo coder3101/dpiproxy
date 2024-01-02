@@ -1,9 +1,14 @@
-use std::error::Error;
+use std::{
+    error::Error,
+    net::SocketAddr,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use httparse::{Request, Response};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{unix::SocketAddr, TcpSocket, TcpStream},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    net::{TcpSocket, TcpStream},
+    signal,
 };
 
 fn response_to_bytes(response: &Response) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -44,50 +49,83 @@ fn request_to_bytes(request: &Request) -> Result<Vec<u8>, Box<dyn Error>> {
     Ok(http_request.into_bytes())
 }
 
-async fn handle_connection(
-    mut stream: TcpStream,
-    _: std::net::SocketAddr,
-) -> Result<(), Box<dyn Error>> {
-    let mut buf = String::new();
-    let mut server_stream = None;
-    let (mut reader, mut writer) = stream.split();
-    while (reader.read_to_string(&mut buf).await).is_ok() {
-        let mut h = [httparse::EMPTY_HEADER; 16];
-        let mut req = Request::new(&mut h);
-        req.parse(buf.as_bytes())?;
+async fn handle_https_connection() -> Result<(), Box<dyn Error>> {
+    todo!()
+}
 
-        if let Some("CONNECT") = req.method {
-            let res = Response {
-                version: req.version,
-                code: Some(200),
-                reason: Some("Connection Established"),
-                headers: &mut [],
-            };
-            let server_socket = TcpSocket::new_v4()?;
-            server_stream = Some(server_socket.connect(req.path.unwrap().parse()?).await?);
-            let data = response_to_bytes(&res)?;
-            writer.write_all(&data).await?;
-        } else if let Some(stream) = &mut server_stream {
-            stream.write_all(buf.as_bytes()).await?;
+async fn handle_connection(mut client_stream: TcpStream) -> Result<(), Box<dyn Error>> {
+    let mut server_stream: Option<TcpStream> = None;
+    let mut buff = [0; 1028];
+    let bytes_read = client_stream.read(&mut buff).await?;
+    if bytes_read == 0 {
+        println!("Connection closed by client");
+        return Ok(());
+    }
+    let data = &buff[..bytes_read];
+
+    if data.starts_with(b"CONNECT") {
+        let elems = String::from_utf8_lossy(data)
+            .lines()
+            .next()
+            .map(|l| {
+                l.split_whitespace()
+                    .map(ToOwned::to_owned)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap();
+
+        let conn = elems.get(1).expect("Missing connection");
+        let (host, port) = conn.split_once(':').unwrap();
+        let ipaddr = dnsoverhttps::resolve_host(host)
+            .unwrap()
+            .get(0)
+            .cloned()
+            .unwrap();
+        let server_socket = if ipaddr.is_ipv4() {
+            TcpSocket::new_v4()
+        } else {
+            TcpSocket::new_v6()
+        }?;
+        let socket_addr = SocketAddr::new(ipaddr, port.parse().unwrap_or(443));
+        println!("Resolved {:?} to socket {:?}", (host, port), socket_addr);
+        server_stream = Some(server_socket.connect(socket_addr).await?);
+        let data = b"HTTP/1.1 200 OK\r\n\r\n";
+        client_stream.write_all(data).await?;
+
+        // Capture the TLS handshake
+        //
+        let bytes_read = client_stream.read(&mut buff).await?;
+        if bytes_read == 0 {
+            println!("Connection closed by client");
+            return Ok(());
+        }
+        let data = &buff[..bytes_read];
+        for chunk in data.chunks(6) {
+            server_stream.as_mut().unwrap().write_all(chunk).await?;
         }
     }
-    println!("Done inner");
+    if let Some(ssteam) = &mut server_stream {
+        tokio::io::copy_bidirectional(ssteam, &mut client_stream).await?;
+    // } else {
+    //     println!("Got chunk: \n{}\n============", String::from_utf8_lossy(&buff));
+    }
     Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let socket = TcpSocket::new_v4()?;
-    socket.bind("0.0.0.0:8001".parse().unwrap())?;
+    socket.set_reuseaddr(true)?;
+    socket.bind("0.0.0.0:8000".parse().unwrap())?;
 
     let listener = socket.listen(128)?;
-    loop {
-        let con = listener.accept().await?;
-        tokio::spawn(async move {
-            let _ = handle_connection(con.0, con.1).await;
-        });
 
-        println!("New request processing...");
+    loop {
+        let (stream, _) = listener.accept().await?;
+        tokio::spawn(async move {
+            if let Err(e) = handle_connection(stream).await {
+                eprintln!("Error handling connection {e}");
+            }
+        });
     }
-    // Ok(())
 }
