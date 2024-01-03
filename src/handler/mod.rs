@@ -14,7 +14,6 @@ pub async fn handle_connection(mut cstream: TcpStream, _: Arc<Args>) -> anyhow::
     let bytes_read = cstream.read(&mut buff).await?;
     if bytes_read == 0 {
         tracing::info!("Connection closed by client");
-        println!("Connection closed by client");
         return Ok(());
     }
     let data = &buff[..bytes_read];
@@ -33,7 +32,7 @@ pub async fn handle_connection(mut cstream: TcpStream, _: Arc<Args>) -> anyhow::
         }
     } else {
         // HTTP only
-        tracing::warn!("Blocked request non-HTTP request");
+        // tracing::warn!("Blocked request non-HTTP request");
     }
     Ok(())
 }
