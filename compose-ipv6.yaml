@@ -1,0 +1,22 @@
+version: "2.4"
+services:
+  server:
+    build:
+      context: .
+      target: final
+    ports:
+      - 8000:8000
+    restart: unless-stopped
+    networks:
+      - net2
+networks:
+  net2:
+    name: net2
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 2001:db8:a::/64
+          gateway: 2001:db8:a::1
+
+
+
