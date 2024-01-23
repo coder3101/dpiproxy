@@ -21,6 +21,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     socket.bind(addr.parse().unwrap())?;
 
     tracing::info!("Proxy is listening for connection on {addr}");
+    tracing::info!("Proxy is using {:?} DNS", args.dns);
 
     let listener = socket.listen(128)?;
 

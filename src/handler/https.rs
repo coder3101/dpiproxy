@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::anyhow;
 use tokio::{
@@ -6,7 +6,7 @@ use tokio::{
     net::{TcpSocket, TcpStream},
 };
 
-use crate::resolver::resolve_host;
+use crate::{cli::Args, resolver::resolve_host};
 
 fn parse_connect_request(first_data: &str) -> anyhow::Result<(&str, &str)> {
     let params = first_data
@@ -25,13 +25,14 @@ fn parse_connect_request(first_data: &str) -> anyhow::Result<(&str, &str)> {
 pub async fn handle_https_connection(
     first_data: &str,
     cstream: &mut TcpStream,
+    args: Arc<Args>,
 ) -> anyhow::Result<TcpStream> {
     let (host, port) = parse_connect_request(first_data)?;
     tracing::debug!(
         handler = "https",
         "Requesting to connect to {host} on {port}"
     );
-    let result = resolve_host(host)
+    let result = resolve_host(host, args.dns)
         .await?
         .iter()
         .next()

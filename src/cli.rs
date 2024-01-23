@@ -34,7 +34,6 @@ pub struct Args {
 #[derive(Debug, Clone, ValueEnum, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DnsProviders {
     System,
-    CustomInsecure,
     GoogleDnsOverTLS,
     GoogleDnsOverHTTPS,
     CloudflareDnsOverTLS,

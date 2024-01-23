@@ -9,7 +9,7 @@ use self::https::handle_https_connection;
 mod http;
 mod https;
 
-pub async fn handle_connection(mut cstream: TcpStream, _: Arc<Args>) -> anyhow::Result<()> {
+pub async fn handle_connection(mut cstream: TcpStream, args: Arc<Args>) -> anyhow::Result<()> {
     let mut buff = [0; 1028];
     let bytes_read = cstream.read(&mut buff).await?;
     if bytes_read == 0 {
@@ -19,7 +19,7 @@ pub async fn handle_connection(mut cstream: TcpStream, _: Arc<Args>) -> anyhow::
     let data = &buff[..bytes_read];
 
     if data.starts_with(b"CONNECT") {
-        match handle_https_connection(String::from_utf8_lossy(data).as_ref(), &mut cstream).await {
+        match handle_https_connection(String::from_utf8_lossy(data).as_ref(), &mut cstream, args).await {
             Ok(mut sstream) => {
                 if let Err(e) = tokio::io::copy_bidirectional(&mut sstream, &mut cstream).await {
                     tracing::debug!("Bidrectional copy error {e}");
