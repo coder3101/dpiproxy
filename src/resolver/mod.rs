@@ -1,11 +1,25 @@
-use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+use hickory_resolver::config::{LookupIpStrategy, ResolverConfig, ResolverOpts};
 use hickory_resolver::lookup_ip::LookupIp;
 use hickory_resolver::TokioAsyncResolver;
 
-use crate::cli::DnsProviders;
+use self::provider::DnsProviders;
 
-pub async fn resolve_host(host: &str, provider: DnsProviders) -> anyhow::Result<LookupIp> {
+pub mod provider;
+
+pub async fn resolve_host(
+    host: &str,
+    provider: DnsProviders,
+    prefer_ipv6: bool,
+) -> anyhow::Result<LookupIp> {
     // Match the provided provider and generate appropriate resolver
+    //
+    let mut opts = ResolverOpts::default();
+
+    opts.ip_strategy = if prefer_ipv6 {
+        LookupIpStrategy::Ipv6thenIpv4
+    } else {
+        LookupIpStrategy::Ipv4thenIpv6
+    };
 
     match provider {
         DnsProviders::System => {

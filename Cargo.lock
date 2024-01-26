@@ -201,6 +201,7 @@ dependencies = [
  "anyhow",
  "clap",
  "hickory-resolver",
+ "rand",
  "tokio",
  "tracing",
  "tracing-subscriber",

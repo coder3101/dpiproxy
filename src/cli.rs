@@ -1,6 +1,6 @@
-use std::net::IpAddr;
+use clap::Parser;
 
-use clap::{Parser, ValueEnum};
+use crate::resolver::provider::DnsProviders;
 
 /// dpiproxy is a proxy built to bypass censorship using Deep packet inspection
 #[derive(Debug, Parser)]
@@ -18,26 +18,19 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub reuse_address: bool,
 
-    /// DNS server IP to use incase of custom DNS resolution
-    #[arg(long)]
-    pub dns_ip: Option<IpAddr>,
-
-    /// DNS server Port to use incase of custom DNS resolution
-    #[arg(long)]
-    pub dns_port: Option<u16>,
+    /// Prefer IPv6 over IPv4 for DNS resolution
+    #[arg(long, default_value_t = false)]
+    pub prefer_ipv6: bool,
 
     /// DNS to use for name resolution
     #[arg(long, value_enum, default_value_t = DnsProviders::System)]
     pub dns: DnsProviders,
-}
 
-#[derive(Debug, Clone, ValueEnum, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DnsProviders {
-    System,
-    GoogleDnsOverTLS,
-    GoogleDnsOverHTTPS,
-    CloudflareDnsOverTLS,
-    CloudflareDnsOverHTTPS,
-    Quad9DnsOverTLS,
-    Quad9DnsOverHTTPS,
+    /// TLS CLIENT HELLO segmentation size
+    #[arg(long, default_value_t = 6)]
+    pub tls_segment_size: usize,
+
+    /// TLS CLIENT HELLO shuffling
+    #[arg(long, default_value_t = false)]
+    pub tls_segment_shuffle: bool,
 }

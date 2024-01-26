@@ -1,6 +1,7 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::anyhow;
+use rand::seq::SliceRandom;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpSocket, TcpStream},
@@ -32,7 +33,7 @@ pub async fn handle_https_connection(
         handler = "https",
         "Requesting to connect to {host} on {port}"
     );
-    let result = resolve_host(host, args.dns)
+    let result = resolve_host(host, args.dns, args.prefer_ipv6)
         .await?
         .iter()
         .next()
@@ -70,7 +71,13 @@ pub async fn handle_https_connection(
             }
 
             let data = &buff[..bytes_read];
-            for chunk in data.chunks(6) {
+            let mut chunks = data.chunks(args.tls_segment_size).collect::<Vec<_>>();
+
+            if args.tls_segment_shuffle {
+                chunks.shuffle(&mut rand::thread_rng());
+            }
+
+            for chunk in chunks {
                 sstream.write_all(chunk).await?;
             }
             Ok(sstream)
