@@ -10,4 +10,3 @@ pub enum DnsProviders {
     Quad9DnsOverTLS,
     Quad9DnsOverHTTPS,
 }
-

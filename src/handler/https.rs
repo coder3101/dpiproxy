@@ -1,11 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::anyhow;
-use rand::seq::SliceRandom;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpSocket, TcpStream},
 };
+use tracing::{instrument, Instrument};
 
 use crate::{cli::Args, resolver::resolve_host};
 
@@ -23,16 +23,14 @@ fn parse_connect_request(first_data: &str) -> anyhow::Result<(&str, &str)> {
         .ok_or_else(|| anyhow!("CONNECT host does not contain ':'"))
 }
 
+#[instrument(skip(first_data, cstream, args), name = "https-handler")]
 pub(super) async fn handle_connection(
     first_data: &str,
     cstream: &mut TcpStream,
     args: Arc<Args>,
 ) -> anyhow::Result<TcpStream> {
     let (host, port) = parse_connect_request(first_data)?;
-    tracing::debug!(
-        handler = "https",
-        "Requesting to connect to {host} on {port}"
-    );
+    tracing::debug!("Requesting to connect to {host} on {port}");
     let result = resolve_host(host, args.dns, args.prefer_ipv6)
         .await?
         .iter()
@@ -46,39 +44,41 @@ pub(super) async fn handle_connection(
     }?;
 
     let sock_addr = SocketAddr::new(result, port.parse().unwrap_or(443));
-    tracing::info!(
-        handler = "https",
-        "DNS resolution for {host} resolved to {sock_addr:?}",
-    );
+    tracing::info!("DNS resolution for {host} resolved to {sock_addr:?}",);
 
-    match server.connect(sock_addr).await {
+    match server
+        .connect(sock_addr)
+        .instrument(tracing::info_span!("connect"))
+        .await
+    {
         Err(e) => {
             tracing::warn!(
-                handler = "https",
                 "Proxy server cannot establish connection to {sock_addr} for {host}. Error {e}"
             );
             Err(e.into())
         }
         Ok(mut sstream) => {
-            tracing::debug!(handler = "https", "Connection to remote {host} is success");
-            cstream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
+            tracing::debug!("Connection to remote {host} is success");
+            cstream
+                .write_all(b"HTTP/1.1 200 OK\r\n\r\n")
+                .instrument(tracing::info_span!("client CONNECT reply"))
+                .await?;
+
+            let iospan = tracing::info_span!("io span");
+            let _guard = iospan.enter();
 
             // Capture TLS handshake
             let mut buff = [0; 1028];
-            let bytes_read = cstream.read(&mut buff).await?;
+            let bytes_read = cstream.read(&mut buff).in_current_span().await?;
             if bytes_read == 0 {
                 return Err(anyhow!("Client closed before CLIENT HELLO"));
             }
 
             let data = &buff[..bytes_read];
-            let mut chunks = data.chunks(args.tls_segment_size).collect::<Vec<_>>();
-
-            if args.tls_segment_shuffle {
-                chunks.shuffle(&mut rand::thread_rng());
-            }
+            let chunks = data.chunks(args.tls_segment_size).collect::<Vec<_>>();
 
             for chunk in chunks {
-                sstream.write_all(chunk).await?;
+                sstream.write_all(chunk).in_current_span().await?;
             }
             Ok(sstream)
         }

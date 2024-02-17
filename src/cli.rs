@@ -29,8 +29,4 @@ pub struct Args {
     /// TLS CLIENT HELLO segmentation size
     #[arg(long, default_value_t = 6)]
     pub tls_segment_size: usize,
-
-    /// TLS CLIENT HELLO shuffling
-    #[arg(long, default_value_t = false)]
-    pub tls_segment_shuffle: bool,
 }

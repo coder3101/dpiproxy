@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use tracing::{instrument, Instrument};
 
 use tokio::{io::AsyncReadExt, net::TcpStream};
 
@@ -7,6 +8,12 @@ use crate::cli::Args;
 mod http;
 mod https;
 
+#[instrument(
+    skip(cstream)
+    fields(
+        client = %cstream.local_addr().unwrap(),
+    )
+)]
 pub async fn handle_connection(mut cstream: TcpStream, args: Arc<Args>) -> anyhow::Result<()> {
     let mut buff = [0; 1028];
     let bytes_read = cstream.read(&mut buff).await?;
@@ -18,11 +25,14 @@ pub async fn handle_connection(mut cstream: TcpStream, args: Arc<Args>) -> anyho
     let first_data = String::from_utf8_lossy(data);
 
     if data.starts_with(b"CONNECT") {
-        match https::handle_connection(&first_data, &mut cstream, args)
-            .await
-        {
+        tracing::info!("handling with https handler");
+        match https::handle_connection(&first_data, &mut cstream, args).await {
             Ok(mut sstream) => {
-                if let Err(e) = tokio::io::copy_bidirectional(&mut sstream, &mut cstream).await {
+                let remote = sstream.peer_addr()?;
+                if let Err(e) = tokio::io::copy_bidirectional(&mut sstream, &mut cstream)
+                    .instrument(tracing::info_span!("bidirectional stream copying", %remote))
+                    .await
+                {
                     tracing::debug!("Bidrectional copy error {e}");
                     return Err(e.into());
                 }
@@ -31,21 +41,8 @@ pub async fn handle_connection(mut cstream: TcpStream, args: Arc<Args>) -> anyho
                 return Err(e);
             }
         }
-    } else {
-        match http::handle_connection(&first_data, &mut cstream, args).await {
-            Ok(mut sstream) => {
-            if let Err(e) = tokio::io::copy_bidirectional(&mut sstream, &mut cstream).await {
-                tracing::debug!("Bidrectional copy error {e}");
-                return Err(e.into());
-            }
-            }
-            Err(e) => {
-            return Err(e);
-            }
-        }
-        // Log the data and birdectional copy
-        // HTTP only
-        // tracing::warn!("Blocked request non-HTTP request");
+    } else if let Err(e) = http::handle_connection(&first_data, &mut cstream, args).await {
+        return Err(e);
     }
     Ok(())
 }

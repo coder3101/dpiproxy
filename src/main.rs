@@ -4,6 +4,7 @@ use std::{error::Error, sync::Arc};
 use clap::Parser;
 use cli::Args;
 use tokio::net::TcpSocket;
+use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 mod cli;
 mod handler;
@@ -11,7 +12,15 @@ mod resolver;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt().init();
+    let tracer = opentelemetry_jaeger::new_agent_pipeline()
+        .with_service_name("dpiproxy")
+        .install_simple()?;
+
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    let subscriber = Registry::default().with(telemetry);
+    tracing::subscriber::set_global_default(subscriber).unwrap();
+
     let args = Arc::new(Args::parse());
     let socket = TcpSocket::new_v4()?;
     if args.reuse_address {

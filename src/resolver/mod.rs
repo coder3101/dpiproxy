@@ -1,11 +1,13 @@
 use hickory_resolver::config::{LookupIpStrategy, ResolverConfig, ResolverOpts};
 use hickory_resolver::lookup_ip::LookupIp;
 use hickory_resolver::TokioAsyncResolver;
+use tracing::instrument;
 
 use self::provider::DnsProviders;
 
 pub mod provider;
 
+#[instrument]
 pub async fn resolve_host(
     host: &str,
     provider: DnsProviders,
