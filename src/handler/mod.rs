@@ -4,8 +4,6 @@ use tokio::{io::AsyncReadExt, net::TcpStream};
 
 use crate::cli::Args;
 
-use self::https::handle_https_connection;
-
 mod http;
 mod https;
 
@@ -17,9 +15,12 @@ pub async fn handle_connection(mut cstream: TcpStream, args: Arc<Args>) -> anyho
         return Ok(());
     }
     let data = &buff[..bytes_read];
+    let first_data = String::from_utf8_lossy(data);
 
     if data.starts_with(b"CONNECT") {
-        match handle_https_connection(String::from_utf8_lossy(data).as_ref(), &mut cstream, args).await {
+        match https::handle_connection(&first_data, &mut cstream, args)
+            .await
+        {
             Ok(mut sstream) => {
                 if let Err(e) = tokio::io::copy_bidirectional(&mut sstream, &mut cstream).await {
                     tracing::debug!("Bidrectional copy error {e}");
@@ -31,6 +32,18 @@ pub async fn handle_connection(mut cstream: TcpStream, args: Arc<Args>) -> anyho
             }
         }
     } else {
+        match http::handle_connection(&first_data, &mut cstream, args).await {
+            Ok(mut sstream) => {
+            if let Err(e) = tokio::io::copy_bidirectional(&mut sstream, &mut cstream).await {
+                tracing::debug!("Bidrectional copy error {e}");
+                return Err(e.into());
+            }
+            }
+            Err(e) => {
+            return Err(e);
+            }
+        }
+        // Log the data and birdectional copy
         // HTTP only
         // tracing::warn!("Blocked request non-HTTP request");
     }

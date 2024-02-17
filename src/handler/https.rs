@@ -23,7 +23,7 @@ fn parse_connect_request(first_data: &str) -> anyhow::Result<(&str, &str)> {
         .ok_or_else(|| anyhow!("CONNECT host does not contain ':'"))
 }
 
-pub async fn handle_https_connection(
+pub(super) async fn handle_connection(
     first_data: &str,
     cstream: &mut TcpStream,
     args: Arc<Args>,
