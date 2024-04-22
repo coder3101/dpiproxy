@@ -2,17 +2,24 @@
 name = "dpiproxy"
 version = "0.1.0"
 edition = "2021"
+description = "A Deep packet inspection by pass proxy for HTTP and HTTPS traffic"
+license = "apache-2.0"
+authors = ["coder3101"]
 
+
+[package.metadata.deb]
+systemd-units = { enable = true }
+maintainer-scripts = "debian/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.79"
 clap = { version = "4.4.12", features = ["derive"] }
-hickory-resolver = { version = "0.24.0", features = ["dns-over-https-rustls", "webpki-roots" ] }
-opentelemetry = "0.21.0"
-opentelemetry-jaeger = "0.20.0"
+hickory-resolver = { version = "0.24.0", features = [
+	"dns-over-https-rustls",
+	"webpki-roots",
+] }
 rand = "0.8.5"
 tokio = { version = "1.35.1", features = ["full"] }
 tracing = "0.1.40"
-tracing-opentelemetry = "0.22.0"
 tracing-subscriber = "0.3.18"

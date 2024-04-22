@@ -1,0 +1,8 @@
+[Unit]
+Description=A Deep Packet Inspection bypass proxy for HTTP and HTTPS
+
+[Service]
+ExecStart=/usr/bin/dpiproxy
+
+[Install]
+WantedBy=multi-user.target
