@@ -8,9 +8,8 @@ authors = ["coder3101"]
 
 
 [package.metadata.deb]
+systemd-units = { enable = true }
 maintainer-scripts = "debian/"
-systemd-units = { enable = false }
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
