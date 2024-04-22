@@ -1,25 +1,17 @@
 use crate::handler::handle_connection;
-use std::{error::Error, sync::Arc};
+use std::sync::Arc;
 
 use clap::Parser;
 use cli::Args;
 use tokio::net::TcpSocket;
-use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 mod cli;
 mod handler;
 mod resolver;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let tracer = opentelemetry_jaeger::new_agent_pipeline()
-        .with_service_name("dpiproxy")
-        .install_simple()?;
-
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-    let subscriber = Registry::default().with(telemetry);
-    tracing::subscriber::set_global_default(subscriber).unwrap();
+async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
 
     let args = Arc::new(Args::parse());
     let socket = TcpSocket::new_v4()?;

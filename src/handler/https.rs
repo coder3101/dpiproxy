@@ -5,7 +5,6 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpSocket, TcpStream},
 };
-use tracing::{instrument, Instrument};
 
 use crate::{cli::Args, resolver::resolve_host};
 
@@ -23,7 +22,6 @@ fn parse_connect_request(first_data: &str) -> anyhow::Result<(&str, &str)> {
         .ok_or_else(|| anyhow!("CONNECT host does not contain ':'"))
 }
 
-#[instrument(skip(first_data, cstream, args), name = "https-handler")]
 pub(super) async fn handle_connection(
     first_data: &str,
     cstream: &mut TcpStream,
@@ -46,11 +44,7 @@ pub(super) async fn handle_connection(
     let sock_addr = SocketAddr::new(result, port.parse().unwrap_or(443));
     tracing::info!("DNS resolution for {host} resolved to {sock_addr:?}",);
 
-    match server
-        .connect(sock_addr)
-        .instrument(tracing::info_span!("connect"))
-        .await
-    {
+    match server.connect(sock_addr).await {
         Err(e) => {
             tracing::warn!(
                 "Proxy server cannot establish connection to {sock_addr} for {host}. Error {e}"
@@ -59,17 +53,14 @@ pub(super) async fn handle_connection(
         }
         Ok(mut sstream) => {
             tracing::debug!("Connection to remote {host} is success");
-            cstream
-                .write_all(b"HTTP/1.1 200 OK\r\n\r\n")
-                .instrument(tracing::info_span!("client CONNECT reply"))
-                .await?;
+            cstream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
 
             let iospan = tracing::info_span!("io span");
             let _guard = iospan.enter();
 
             // Capture TLS handshake
             let mut buff = [0; 1028];
-            let bytes_read = cstream.read(&mut buff).in_current_span().await?;
+            let bytes_read = cstream.read(&mut buff).await?;
             if bytes_read == 0 {
                 return Err(anyhow!("Client closed before CLIENT HELLO"));
             }
@@ -78,7 +69,7 @@ pub(super) async fn handle_connection(
             let chunks = data.chunks(args.tls_segment_size).collect::<Vec<_>>();
 
             for chunk in chunks {
-                sstream.write_all(chunk).in_current_span().await?;
+                sstream.write_all(chunk).await?;
             }
             Ok(sstream)
         }

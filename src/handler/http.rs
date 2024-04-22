@@ -1,5 +1,4 @@
 use std::{net::SocketAddr, sync::Arc};
-use tracing::{instrument, Instrument};
 
 use anyhow::{anyhow, Result};
 use tokio::{
@@ -21,7 +20,6 @@ fn parse_host_from_data(first_data: &str) -> Result<String> {
         .to_owned())
 }
 
-#[instrument(skip(first_data, cstream, args), name = "http-handler")]
 pub(super) async fn handle_connection(
     first_data: &str,
     cstream: &mut TcpStream,
@@ -42,11 +40,7 @@ pub(super) async fn handle_connection(
         TcpSocket::new_v6()
     }?;
 
-    match socket
-        .connect(SocketAddr::new(ip, 80))
-        .instrument(tracing::info_span!("connect"))
-        .await
-    {
+    match socket.connect(SocketAddr::new(ip, 80)).await {
         Ok(mut sstream) => {
             let data = first_data.bytes().collect::<Vec<u8>>();
             let chunks = data.chunks(args.tls_segment_size).collect::<Vec<_>>();
@@ -63,21 +57,21 @@ pub(super) async fn handle_connection(
             let mut total_bytes_read = 0;
             let mut total_bytes_written = 0;
             loop {
-                let bytes_read = sstream.read(&mut buff).in_current_span().await?;
+                let bytes_read = sstream.read(&mut buff).await?;
                 if bytes_read == 0 {
                     break;
                 }
 
                 total_bytes_read += bytes_read;
 
-                let bytes_wrote = cstream.write(&buff[..bytes_read]).in_current_span().await?;
+                let bytes_wrote = cstream.write(&buff[..bytes_read]).await?;
                 if bytes_wrote == 0 {
                     break;
                 }
                 total_bytes_written += bytes_wrote
             }
-            tracing::info!("{total_bytes_read} bytes read from server");
-            tracing::info!("{total_bytes_written} bytes wrote to client");
+            tracing::debug!("{total_bytes_read} bytes read from server");
+            tracing::debug!("{total_bytes_written} bytes wrote to client");
             Ok(())
         }
         Err(e) => {

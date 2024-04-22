@@ -23,7 +23,7 @@ pub struct Args {
     pub prefer_ipv6: bool,
 
     /// DNS to use for name resolution
-    #[arg(long, value_enum, default_value_t = DnsProviders::System)]
+    #[arg(long, value_enum, default_value_t = DnsProviders::CloudflareDnsOverTLS)]
     pub dns: DnsProviders,
 
     /// TLS CLIENT HELLO segmentation size
